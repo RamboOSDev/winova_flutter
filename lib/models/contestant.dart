@@ -9,6 +9,14 @@ class Contestant {
   final DateTime joinedAt;
   int voteCount;
   String stage; // 'stage1', 'stage2', 'stage3', 'eliminated', 'winner'
+  
+  // Separate vote tracking
+  int stage1Votes; // Votes received in Stage1
+  int finalVotes; // Votes received in Final stage
+  
+  // Aura rewards
+  double stage1AuraEarned; // 20% of paid votes in Stage1
+  double finalAuraEarned; // 20% of paid votes in Final
 
   Contestant({
     required this.id,
@@ -20,6 +28,10 @@ class Contestant {
     DateTime? joinedAt,
     this.voteCount = 0,
     this.stage = 'stage1',
+    this.stage1Votes = 0,
+    this.finalVotes = 0,
+    this.stage1AuraEarned = 0.0,
+    this.finalAuraEarned = 0.0,
   }) : joinedAt = joinedAt ?? DateTime.now();
 
   Contestant copyWith({
@@ -32,6 +44,10 @@ class Contestant {
     DateTime? joinedAt,
     int? voteCount,
     String? stage,
+    int? stage1Votes,
+    int? finalVotes,
+    double? stage1AuraEarned,
+    double? finalAuraEarned,
   }) {
     return Contestant(
       id: id ?? this.id,
@@ -43,6 +59,10 @@ class Contestant {
       joinedAt: joinedAt ?? this.joinedAt,
       voteCount: voteCount ?? this.voteCount,
       stage: stage ?? this.stage,
+      stage1Votes: stage1Votes ?? this.stage1Votes,
+      finalVotes: finalVotes ?? this.finalVotes,
+      stage1AuraEarned: stage1AuraEarned ?? this.stage1AuraEarned,
+      finalAuraEarned: finalAuraEarned ?? this.finalAuraEarned,
     );
   }
 
@@ -56,6 +76,10 @@ class Contestant {
         'joinedAt': joinedAt.toIso8601String(),
         'voteCount': voteCount,
         'stage': stage,
+        'stage1Votes': stage1Votes,
+        'finalVotes': finalVotes,
+        'stage1AuraEarned': stage1AuraEarned,
+        'finalAuraEarned': finalAuraEarned,
       };
 
   factory Contestant.fromJson(Map<String, dynamic> json) => Contestant(
@@ -68,5 +92,9 @@ class Contestant {
         joinedAt: DateTime.parse(json['joinedAt']),
         voteCount: json['voteCount'] ?? 0,
         stage: json['stage'] ?? 'stage1',
+        stage1Votes: json['stage1Votes'] ?? 0,
+        finalVotes: json['finalVotes'] ?? 0,
+        stage1AuraEarned: json['stage1AuraEarned'] ?? 0.0,
+        finalAuraEarned: json['finalAuraEarned'] ?? 0.0,
       );
 }

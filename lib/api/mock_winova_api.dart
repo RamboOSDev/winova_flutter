@@ -129,12 +129,17 @@ class MockWinovaApi {
     );
   }
 
-  Future<bool> vote(String contestantId, String userId) async {
+  Future<bool> vote(String contestantId, String userId, {int voteCount = 1, bool isFreeVote = false}) async {
     await Future.delayed(const Duration(milliseconds: 200));
     final contestant = _contestants[contestantId];
     if (contestant == null) return false;
     
-    contestant.voteCount++;
+    contestant.voteCount += voteCount;
+    
+    // Track stage-specific votes (for simplicity, add to both for now)
+    // In real implementation, check contest stage
+    contestant.stage1Votes += voteCount;
+    
     _contestants[contestantId] = contestant;
     return true;
   }

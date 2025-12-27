@@ -24,6 +24,86 @@ class AppState with ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get error => _error;
   bool get isLoggedIn => _currentUser != null;
+  
+  // Online counter (mock - simulates active users)
+  int _onlineUsersCount = 0;
+  int get onlineUsersCount => _onlineUsersCount;
+  
+  // Timer support for live updates
+  DateTime? _lastUpdateTime;
+  
+  // Check if it's free hour
+  bool get isFreeHourActive {
+    if (_activeContest == null) return false;
+    final now = DateTime.now();
+    if (_activeContest!.freeHourStart != null && _activeContest!.freeHourEnd != null) {
+      return now.isAfter(_activeContest!.freeHourStart!) && 
+             now.isBefore(_activeContest!.freeHourEnd!);
+    }
+    return false;
+  }
+  
+  // Check if free hour is announced (has times set)
+  bool get isFreeHourAnnounced {
+    return _activeContest?.freeHourStart != null;
+  }
+  
+  // Check if free hour has passed
+  bool get isFreeHourPassed {
+    if (_activeContest == null || _activeContest!.freeHourEnd == null) return false;
+    return DateTime.now().isAfter(_activeContest!.freeHourEnd!);
+  }
+  
+  // Check if spotlight is announced
+  bool get isSpotlightAnnounced {
+    if (_activeContest == null) return false;
+    final now = DateTime.now();
+    if (_activeContest!.spotlightAnnouncementTime != null) {
+      return now.isAfter(_activeContest!.spotlightAnnouncementTime!);
+    }
+    return false;
+  }
+  
+  // Calculate spotlight prize
+  double get spotlightPrize {
+    if (_activeContest == null) return 0.0;
+    return _activeContest!.participantIds.length * AppConfig.spotlightDeduction;
+  }
+  
+  // Calculate remaining votes for today
+  int get remainingVotesToday {
+    if (_currentUser == null) return 0;
+    final user = _currentUser!;
+    
+    // Check if we need to reset daily counter
+    final now = DateTime.now();
+    if (user.lastVoteDate == null || 
+        !_isSameDay(user.lastVoteDate!, now)) {
+      return AppConfig.dailyVoteLimit;
+    }
+    
+    return AppConfig.dailyVoteLimit - user.dailyVotesUsed;
+  }
+  
+  // Check if user can use free vote
+  bool get canUseFreeVote {
+    if (_currentUser == null || !isFreeHourActive) return false;
+    
+    final user = _currentUser!;
+    final now = DateTime.now();
+    
+    // Check if free vote was already used today
+    if (user.freeVoteDate != null && _isSameDay(user.freeVoteDate!, now)) {
+      return !user.freeVoteUsedToday;
+    }
+    
+    return true;
+  }
+  
+  // Helper to check if two dates are same day
+  bool _isSameDay(DateTime a, DateTime b) {
+    return a.year == b.year && a.month == b.month && a.day == b.day;
+  }
 
   // Check if current user has joined the active contest
   bool get hasJoinedContest {
@@ -171,28 +251,83 @@ class AppState with ChangeNotifier {
     }
   }
 
-  Future<bool> vote(String contestantId) async {
+  /// Vote for a contestant
+  /// 
+  /// Enhanced voting with support for:
+  /// - Multiple votes at once (voteCount parameter)
+  /// - Free vote during Free Hour (useFreeVote parameter)
+  /// - Daily limit tracking (100 votes per day)
+  /// - Balance verification
+  /// 
+  /// Note: This is an enhanced version of the vote method that maintains
+  /// backward compatibility through optional named parameters.
+  Future<bool> vote(String contestantId, {int voteCount = 1, bool useFreeVote = false}) async {
     if (_currentUser == null || _activeContest == null) return false;
     
     _setLoading(true);
     try {
+      // Check if using free vote
+      if (useFreeVote) {
+        if (!canUseFreeVote) {
+          _error = 'لا يمكنك استخدام التصويت المجاني الآن';
+          notifyListeners();
+          return false;
+        }
+        
+        // Use free vote (no Aura deduction)
+        await _api.vote(contestantId, _currentUser!.id, voteCount: 1, isFreeVote: true);
+        
+        // Mark free vote as used
+        _currentUser!.freeVoteUsedToday = true;
+        _currentUser!.freeVoteDate = DateTime.now();
+        
+        // Reload contestants
+        await loadContestants(_activeContest!.id);
+        
+        _error = null;
+        notifyListeners();
+        return true;
+      }
+      
+      // Regular paid voting
+      final totalCost = _activeContest!.voteAuraCost * voteCount;
+      
+      // Check daily limit
+      final now = DateTime.now();
+      if (_currentUser!.lastVoteDate != null && 
+          _isSameDay(_currentUser!.lastVoteDate!, now)) {
+        // Same day - check limit
+        if (_currentUser!.dailyVotesUsed + voteCount > AppConfig.dailyVoteLimit) {
+          _error = 'تجاوزت الحد اليومي للتصويت (${AppConfig.dailyVoteLimit} صوت)';
+          notifyListeners();
+          return false;
+        }
+      } else {
+        // New day - reset counter
+        _currentUser!.dailyVotesUsed = 0;
+      }
+      
       // Check Aura balance
-      if (_currentUser!.auraBalance < _activeContest!.voteAuraCost) {
-        _error = 'Insufficient Aura balance';
+      if (_currentUser!.auraBalance < totalCost) {
+        _error = 'رصيد الأورا غير كافي';
         notifyListeners();
         return false;
       }
       
       // Deduct vote cost
-      final success = await _api.deductAura(_currentUser!.id, _activeContest!.voteAuraCost);
+      final success = await _api.deductAura(_currentUser!.id, totalCost);
       if (!success) {
-        _error = 'Failed to deduct vote cost';
+        _error = 'فشل خصم تكلفة التصويت';
         notifyListeners();
         return false;
       }
       
+      // Update daily votes
+      _currentUser!.dailyVotesUsed += voteCount;
+      _currentUser!.lastVoteDate = now;
+      
       // Cast vote
-      await _api.vote(contestantId, _currentUser!.id);
+      await _api.vote(contestantId, _currentUser!.id, voteCount: voteCount);
       
       // Reload contestants
       await loadContestants(_activeContest!.id);
@@ -239,6 +374,144 @@ class AppState with ChangeNotifier {
     }
   }
 
+  // Online counter and timing methods
+  
+  /// Start simulating online users counter (updates every 5 seconds)
+  void startOnlineCounterSimulation() {
+    _updateOnlineCounter();
+    // In a real app, this would be a Timer.periodic
+    // For now, we'll update it manually when needed
+  }
+  
+  /// Update online counter with simulated value
+  void _updateOnlineCounter() {
+    // Simulate online users (random between 50-200)
+    final baseCount = 100;
+    final variation = (DateTime.now().second % 20) - 10;
+    _onlineUsersCount = baseCount + variation;
+    _lastUpdateTime = DateTime.now();
+    notifyListeners();
+  }
+  
+  /// Get time remaining for current stage in seconds
+  int? getStageTimeRemaining() {
+    if (_activeContest == null) return null;
+    
+    final now = DateTime.now();
+    final contest = _activeContest!;
+    
+    switch (contest.stage) {
+      case 'preStage':
+        if (contest.stage1StartTime != null) {
+          return contest.stage1StartTime!.difference(now).inSeconds;
+        }
+        break;
+      case 'stage1':
+        if (contest.stage1EndTime != null) {
+          return contest.stage1EndTime!.difference(now).inSeconds;
+        }
+        break;
+      case 'stage1Top50':
+        if (contest.finalStartTime != null) {
+          return contest.finalStartTime!.difference(now).inSeconds;
+        }
+        break;
+      case 'finalStage':
+        if (contest.finalEndTime != null) {
+          return contest.finalEndTime!.difference(now).inSeconds;
+        }
+        break;
+    }
+    
+    return null;
+  }
+  
+  /// Format seconds to HH:MM:SS
+  String formatTimeRemaining(int seconds) {
+    if (seconds < 0) seconds = 0;
+    final hours = seconds ~/ 3600;
+    final minutes = (seconds % 3600) ~/ 60;
+    final secs = seconds % 60;
+    return '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}';
+  }
+  
+  /// Initialize contest timing (call when creating a contest)
+  Contest _initializeContestTiming(Contest contest) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    
+    // Set stage times
+    final stage1Start = today.add(Duration(hours: AppConfig.stage1StartHour));
+    final stage1End = today.add(Duration(hours: AppConfig.stage1EndHour));
+    final finalStart = today.add(Duration(hours: AppConfig.finalStartHour));
+    final finalEnd = today.add(Duration(hours: AppConfig.finalEndHour));
+    
+    // Set spotlight announcement time
+    final spotlightTime = today.add(Duration(hours: AppConfig.spotlightAnnouncementHour));
+    
+    // Generate random free hour (between 2 PM and 7 PM)
+    final freeHourStart = _generateRandomFreeHour(today);
+    final freeHourEnd = freeHourStart.add(const Duration(hours: 1));
+    
+    return contest.copyWith(
+      stage1StartTime: stage1Start,
+      stage1EndTime: stage1End,
+      finalStartTime: finalStart,
+      finalEndTime: finalEnd,
+      freeHourStart: freeHourStart,
+      freeHourEnd: freeHourEnd,
+      spotlightAnnouncementTime: spotlightTime,
+      entryFeeNova: AppConfig.entryFeeNova,
+      voteAuraCost: AppConfig.voteAuraCost,
+    );
+  }
+  
+  /// Generate random free hour between stage1 start and end
+  DateTime _generateRandomFreeHour(DateTime today) {
+    // Random hour between 2 PM (14) and 7 PM (19)
+    final seed = today.year * 10000 + today.month * 100 + today.day;
+    final randomHour = 14 + (seed % 5); // Will give consistent hour for same day
+    return today.add(Duration(hours: randomHour));
+  }
+  
+  /// Select random spotlight winner from eligible users
+  Future<void> _selectSpotlightWinner() async {
+    if (_activeContest == null) return;
+    
+    // Get all participants
+    final participants = _contestants
+        .where((c) => c.contestId == _activeContest!.id)
+        .toList();
+    
+    if (participants.isEmpty) return;
+    
+    // In a real app, filter by rank (Marketer, Leader, Manager)
+    // For now, select randomly from all participants
+    final now = DateTime.now();
+    final seed = now.year * 10000 + now.month * 100 + now.day;
+    final winnerIndex = seed % participants.length;
+    final winner = participants[winnerIndex];
+    
+    // Calculate spotlight prize
+    final prize = spotlightPrize;
+    
+    // Update contest with spotlight winner
+    final updatedContest = _activeContest!.copyWith(
+      spotlightUserId: winner.userId,
+      spotlightPrize: prize,
+    );
+    
+    await _api.updateContest(updatedContest);
+    
+    // Award prize to winner
+    await _api.addNova(winner.userId, prize);
+    
+    _activeContest = updatedContest;
+    notifyListeners();
+    
+    debugPrint('Spotlight winner selected: ${winner.displayName} (${prize.toStringAsFixed(1)} Nova)');
+  }
+
   // DEV methods for testing
   
   /// DEV: Create or get today's contest
@@ -258,13 +531,14 @@ class AppState with ChangeNotifier {
       // Create today's contest
       todayContest = Contest(
         id: 'contest_${now.millisecondsSinceEpoch}',
-        name: 'Contest ${now.year}-${now.month}-${now.day}',
+        name: 'مسابقة ${now.day}/${now.month}/${now.year}',
         startDate: todayStart,
         endDate: todayEnd,
         stage: 'preStage',
-        entryFeeNova: 10.0,
-        voteAuraCost: 10.0,
       );
+      
+      // Initialize timing
+      todayContest = _initializeContestTiming(todayContest);
       
       await _api.createContest(todayContest);
       await loadContests();
@@ -273,6 +547,10 @@ class AppState with ChangeNotifier {
     }
     
     _activeContest = todayContest;
+    
+    // Start online counter simulation
+    startOnlineCounterSimulation();
+    
     notifyListeners();
     return todayContest;
   }
