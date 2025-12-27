@@ -261,9 +261,9 @@ class AppState with ChangeNotifier {
         name: 'Contest ${now.year}-${now.month}-${now.day}',
         startDate: todayStart,
         endDate: todayEnd,
-        stage: 'preview',
+        stage: 'preStage',
         entryFeeNova: 10.0,
-        voteAuraCost: 1.0,
+        voteAuraCost: 10.0,
       );
       
       await _api.createContest(todayContest);
@@ -275,6 +275,48 @@ class AppState with ChangeNotifier {
     _activeContest = todayContest;
     notifyListeners();
     return todayContest;
+  }
+
+  /// DEV: Reset day - clear today's contest and all related data
+  Future<void> devResetDay() async {
+    debugPrint('DEV: Resetting day');
+    
+    _setLoading(true);
+    try {
+      // Clear today's contest
+      await _api.clearTodayContest();
+      
+      // Reload data
+      _contests = [];
+      _contestants = [];
+      _activeContest = null;
+      
+      debugPrint('DEV: Day reset complete');
+      notifyListeners();
+    } catch (e) {
+      _error = e.toString();
+      debugPrint('DEV: Error resetting day: $e');
+      notifyListeners();
+    } finally {
+      _setLoading(false);
+    }
+  }
+
+  /// DEV: Create today's contest explicitly
+  Future<void> devCreateTodayContest() async {
+    debugPrint('DEV: Creating today contest');
+    
+    _setLoading(true);
+    try {
+      await devEnsureTodayContest();
+      _error = null;
+      debugPrint('DEV: Today contest created');
+    } catch (e) {
+      _error = e.toString();
+      debugPrint('DEV: Error creating today contest: $e');
+    } finally {
+      _setLoading(false);
+    }
   }
 
   /// DEV: Seed 20 mock contestants for testing
@@ -292,25 +334,26 @@ class AppState with ChangeNotifier {
         debugPrint('DEV: Current user joining contest');
         // Give user enough Nova if needed
         if (_currentUser!.novaBalance < contest.entryFeeNova) {
-          _currentUser!.novaBalance = 100.0;
+          _currentUser!.novaBalance = 1000.0;
+          _currentUser!.auraBalance = 1000.0;
         }
         await joinContest(contest.id);
       }
       
-      // Clear existing contestants for this contest to avoid duplicates
-      _contestants.clear();
+      // Clear existing test contestants for this contest to avoid duplicates
+      await _api.clearTestContestants(contest.id);
       
       // Create 20 mock contestants
       final now = DateTime.now();
       for (int i = 1; i <= 20; i++) {
         final contestant = Contestant(
-          id: 'dev_contestant_${now.millisecondsSinceEpoch}_$i',
+          id: 'dev_contestant_${contest.id}_$i',
           userId: 'dev_user_$i',
           contestId: contest.id,
           displayName: 'متسابق $i',
           bio: 'هذا متسابق تجريبي رقم $i للاختبار',
           joinedAt: now.subtract(Duration(hours: i)),
-          voteCount: (20 - i) * 5, // Varied vote counts for testing
+          voteCount: 0, // Start with 0, will be set by seed votes
           stage: 'stage1',
         );
         
@@ -327,6 +370,35 @@ class AppState with ChangeNotifier {
     } catch (e) {
       _error = e.toString();
       debugPrint('DEV: Error seeding contestants: $e');
+      notifyListeners();
+    } finally {
+      _setLoading(false);
+    }
+  }
+
+  /// DEV: Seed votes for contestants
+  Future<void> devSeedVotes({bool isFinalStage = false}) async {
+    debugPrint('DEV: Seeding votes (finalStage: $isFinalStage)');
+    
+    _setLoading(true);
+    try {
+      final contest = _activeContest;
+      if (contest == null) {
+        throw Exception('No active contest');
+      }
+      
+      // Seed votes using API
+      await _api.seedVotes(contest.id, isFinalStage);
+      
+      // Reload contestants to show updated vote counts
+      await loadContestants(contest.id);
+      
+      _error = null;
+      debugPrint('DEV: Votes seeded successfully');
+      notifyListeners();
+    } catch (e) {
+      _error = e.toString();
+      debugPrint('DEV: Error seeding votes: $e');
       notifyListeners();
     } finally {
       _setLoading(false);
@@ -355,6 +427,183 @@ class AppState with ChangeNotifier {
     } catch (e) {
       _error = e.toString();
       debugPrint('DEV: Error starting stage1: $e');
+      notifyListeners();
+    } finally {
+      _setLoading(false);
+    }
+  }
+
+  /// DEV: Freeze Top50 - move to stage1Top50
+  Future<void> devFreezeTop50Now() async {
+    debugPrint('DEV: Freezing Top50');
+    
+    _setLoading(true);
+    try {
+      final contest = _activeContest;
+      if (contest == null) {
+        throw Exception('No active contest');
+      }
+      
+      // Get top 50 contestants by vote count
+      final sortedContestants = List<Contestant>.from(_contestants)
+        ..sort((a, b) => b.voteCount.compareTo(a.voteCount));
+      final top50 = sortedContestants.take(50).toList();
+      final top50Ids = top50.map((c) => c.id).toList();
+      
+      // Update contest stage and save top50
+      final updatedContest = contest.copyWith(
+        stage: 'stage1Top50',
+        top50Ids: top50Ids,
+      );
+      await _api.updateContest(updatedContest);
+      
+      // Reload contests
+      await loadContests();
+      
+      _error = null;
+      debugPrint('DEV: Top50 frozen with ${top50Ids.length} contestants');
+      notifyListeners();
+    } catch (e) {
+      _error = e.toString();
+      debugPrint('DEV: Error freezing top50: $e');
+      notifyListeners();
+    } finally {
+      _setLoading(false);
+    }
+  }
+
+  /// DEV: Start Final stage immediately
+  Future<void> devStartFinalNow() async {
+    debugPrint('DEV: Starting Final Stage');
+    
+    _setLoading(true);
+    try {
+      final contest = _activeContest;
+      if (contest == null) {
+        throw Exception('No active contest');
+      }
+      
+      // Ensure top50 is set
+      if (contest.top50Ids.isEmpty) {
+        await devFreezeTop50Now();
+        return; // devFreezeTop50Now will reload and notify
+      }
+      
+      // Update contest stage to finalStage
+      final updatedContest = contest.copyWith(stage: 'finalStage');
+      await _api.updateContest(updatedContest);
+      
+      // Reload contests
+      await loadContests();
+      
+      _error = null;
+      debugPrint('DEV: Contest stage updated to finalStage');
+      notifyListeners();
+    } catch (e) {
+      _error = e.toString();
+      debugPrint('DEV: Error starting final stage: $e');
+      notifyListeners();
+    } finally {
+      _setLoading(false);
+    }
+  }
+
+  /// DEV: Finish contest and calculate winners
+  Future<void> devFinishNow() async {
+    debugPrint('DEV: Finishing contest');
+    
+    _setLoading(true);
+    try {
+      final contest = _activeContest;
+      if (contest == null) {
+        throw Exception('No active contest');
+      }
+      
+      // Get final top 5 from contestants
+      final sortedContestants = List<Contestant>.from(_contestants)
+        ..sort((a, b) => b.voteCount.compareTo(a.voteCount));
+      final top5 = sortedContestants.take(5).toList();
+      
+      // Calculate prizes
+      final totalPrizePool = contest.participantIds.length * 6.0; // 10 entry - 4 platform fee = 6 Nova per participant
+      final prizes = <String, double>{};
+      
+      if (top5.isNotEmpty) {
+        final percentages = [0.50, 0.20, 0.12, 0.10, 0.08]; // Top 5 distribution
+        for (int i = 0; i < top5.length && i < 5; i++) {
+          prizes[top5[i].userId] = totalPrizePool * percentages[i];
+        }
+      }
+      
+      // Update contest with winners and mark as finished
+      final updatedContest = contest.copyWith(
+        stage: 'finished',
+        winnerPrizes: prizes,
+      );
+      await _api.updateContest(updatedContest);
+      
+      // Distribute prizes
+      for (final entry in prizes.entries) {
+        await _api.addNova(entry.key, entry.value);
+      }
+      
+      // Reload contests
+      await loadContests();
+      
+      _error = null;
+      debugPrint('DEV: Contest finished with ${prizes.length} winners');
+      notifyListeners();
+    } catch (e) {
+      _error = e.toString();
+      debugPrint('DEV: Error finishing contest: $e');
+      notifyListeners();
+    } finally {
+      _setLoading(false);
+    }
+  }
+
+  /// DEV: Open Full Flow - complete end-to-end setup
+  Future<void> devOpenFullFlow() async {
+    debugPrint('DEV: Starting Full Flow');
+    
+    _setLoading(true);
+    try {
+      // 1. Reset day
+      await _api.clearTodayContest();
+      _contests = [];
+      _contestants = [];
+      _activeContest = null;
+      
+      // 2. Create today contest
+      await devEnsureTodayContest();
+      
+      // 3. Seed contestants (20)
+      await devSeedContestants();
+      
+      // 4. Set stage to Stage1
+      await devStartStage1Now();
+      
+      // 5. Seed votes
+      await devSeedVotes(isFinalStage: false);
+      
+      // 6. Freeze top50
+      await devFreezeTop50Now();
+      
+      // 7. Set stage to Final
+      await devStartFinalNow();
+      
+      // 8. Seed final votes
+      await devSeedVotes(isFinalStage: true);
+      
+      // 9. Finish results
+      await devFinishNow();
+      
+      _error = null;
+      debugPrint('DEV: Full Flow completed successfully');
+      notifyListeners();
+    } catch (e) {
+      _error = e.toString();
+      debugPrint('DEV: Error in full flow: $e');
       notifyListeners();
     } finally {
       _setLoading(false);

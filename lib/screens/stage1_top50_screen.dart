@@ -44,6 +44,27 @@ class Stage1Top50Screen extends StatelessWidget {
                             color: Colors.grey[500],
                           ),
                     ),
+                    const SizedBox(height: 24),
+                    ElevatedButton.icon(
+                      onPressed: () async {
+                        await appState.devFreezeTop50Now();
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('تم تجميد أفضل 50'),
+                              backgroundColor: Colors.green,
+                            ),
+                          );
+                        }
+                      },
+                      icon: const Icon(Icons.ac_unit),
+                      label: const Text('DEV: تجميد أفضل 50 الآن'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.cyan,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                      ),
+                    ),
                   ],
                 ),
               ),
