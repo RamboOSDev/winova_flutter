@@ -6,7 +6,7 @@ import '../state/app_state.dart';
 import '../models/contest.dart';
 import '../config/app_config.dart';
 import 'stage1_screen_new.dart';
-import 'stage1_top50_screen.dart';
+import 'stage1_top50_screen_new.dart';
 import 'final_results_screen.dart';
 
 /// Enhanced Contests Hub Screen - Professional Daily Contest Management
@@ -618,7 +618,7 @@ class _ContestsScreenNewState extends State<ContestsScreenNew> {
       onPressed = () {
         Navigator.push(
           context,
-          MaterialPageRoute(builder: (context) => const Stage1Top50Screen()),
+          MaterialPageRoute(builder: (context) => const Stage1Top50ScreenNew()),
         );
       };
     } else if (contest.isFinalStage) {
