@@ -1,0 +1,11 @@
+{
+  "name": "WINOVA",
+  "short_name": "WINOVA",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#FFFFFF",
+  "theme_color": "#9C27B0",
+  "description": "WINOVA Flutter MVP",
+  "orientation": "portrait-primary",
+  "prefer_related_applications": false
+}
