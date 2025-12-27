@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../screens/contests_screen.dart';
+import '../screens/contests_screen_new.dart';
 
 /// Home screen with navigation
 class HomeScreen extends StatefulWidget {
@@ -13,7 +13,7 @@ class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 0;
 
   final List<Widget> _screens = [
-    const ContestsScreen(),
+    const ContestsScreenNew(),
     const PlaceholderScreen(title: 'الفريق'),
     const PlaceholderScreen(title: 'المحفظة'),
     const PlaceholderScreen(title: 'الملف الشخصي'),
