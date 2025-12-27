@@ -5,7 +5,7 @@ import 'package:intl/intl.dart';
 import '../state/app_state.dart';
 import '../models/contest.dart';
 import '../config/app_config.dart';
-import 'stage1_screen.dart';
+import 'stage1_screen_new.dart';
 import 'stage1_top50_screen.dart';
 import 'final_results_screen.dart';
 
@@ -608,7 +608,7 @@ class _ContestsScreenNewState extends State<ContestsScreenNew> {
         onPressed = () {
           Navigator.push(
             context,
-            MaterialPageRoute(builder: (context) => const Stage1Screen()),
+            MaterialPageRoute(builder: (context) => const Stage1ScreenNew()),
           );
         };
       }
@@ -627,7 +627,7 @@ class _ContestsScreenNewState extends State<ContestsScreenNew> {
       onPressed = () {
         Navigator.push(
           context,
-          MaterialPageRoute(builder: (context) => const Stage1Screen()), // Reuse for final
+          MaterialPageRoute(builder: (context) => const Stage1ScreenNew()), // Reuse for final
         );
       };
     } else if (contest.isFinished) {
