@@ -83,6 +83,22 @@ class MockWinovaApi {
     return contest;
   }
 
+  Future<void> clearTodayContest() async {
+    await Future.delayed(const Duration(milliseconds: 200));
+    final now = DateTime.now();
+    final todayContests = _contests.values.where((c) {
+      return c.startDate.year == now.year &&
+             c.startDate.month == now.month &&
+             c.startDate.day == now.day;
+    }).toList();
+    
+    for (final contest in todayContests) {
+      _contests.remove(contest.id);
+      // Also remove contestants for this contest
+      _contestants.removeWhere((key, value) => value.contestId == contest.id);
+    }
+  }
+
   // Contestant methods
   Future<List<Contestant>> getContestants(String contestId) async {
     await Future.delayed(const Duration(milliseconds: 200));
@@ -105,6 +121,14 @@ class MockWinovaApi {
     return contestant;
   }
 
+  Future<void> clearTestContestants(String contestId) async {
+    await Future.delayed(const Duration(milliseconds: 200));
+    // Remove all dev contestants for this contest
+    _contestants.removeWhere((key, value) => 
+      value.contestId == contestId && value.id.startsWith('dev_contestant_')
+    );
+  }
+
   Future<bool> vote(String contestantId, String userId) async {
     await Future.delayed(const Duration(milliseconds: 200));
     final contestant = _contestants[contestantId];
@@ -113,6 +137,28 @@ class MockWinovaApi {
     contestant.voteCount++;
     _contestants[contestantId] = contestant;
     return true;
+  }
+
+  Future<void> seedVotes(String contestId, bool isFinalStage) async {
+    await Future.delayed(const Duration(milliseconds: 300));
+    final contestants = _contestants.values.where((c) => c.contestId == contestId).toList();
+    
+    if (contestants.isEmpty) return;
+    
+    // Distribute votes with variety
+    for (int i = 0; i < contestants.length; i++) {
+      final contestant = contestants[i];
+      // Create varied vote distribution
+      // Top contestants get more votes, rest get less
+      int baseVotes = 100 - (i * 4);
+      if (baseVotes < 10) baseVotes = 10;
+      
+      // Add some randomness
+      final variation = (i % 5) * 10;
+      contestant.voteCount = baseVotes + variation;
+      
+      _contestants[contestant.id] = contestant;
+    }
   }
 
   // Wallet methods
@@ -141,6 +187,15 @@ class MockWinovaApi {
     if (user == null || user.auraBalance < amount) return false;
     
     user.auraBalance -= amount;
+    return true;
+  }
+
+  Future<bool> addNova(String userId, double amount) async {
+    await Future.delayed(const Duration(milliseconds: 100));
+    final user = _users[userId];
+    if (user == null) return false;
+    
+    user.novaBalance += amount;
     return true;
   }
 

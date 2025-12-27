@@ -3,6 +3,8 @@ import 'package:provider/provider.dart';
 import '../state/app_state.dart';
 import '../models/contestant.dart';
 import 'stage1_screen.dart';
+import 'stage1_top50_screen.dart';
+import 'final_results_screen.dart';
 
 /// Contests screen with preview functionality
 class ContestsScreen extends StatefulWidget {
@@ -142,7 +144,7 @@ class _ContestsScreenState extends State<ContestsScreen> {
                         );
                       },
                       icon: const Icon(Icons.how_to_vote),
-                      label: const Text('Stage1 — التصويت'),
+                      label: const Text('ابدأ التصويت - Stage1'),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.orange,
                         foregroundColor: Colors.white,
@@ -150,7 +152,7 @@ class _ContestsScreenState extends State<ContestsScreen> {
                       ),
                     ),
 
-                  if (!contest.isStage1)
+                  if (!contest.isStage1 && !contest.isStage1Top50 && !contest.isFinalStage && !contest.isFinished)
                     OutlinedButton.icon(
                       onPressed: null,
                       icon: const Icon(Icons.lock),
@@ -159,6 +161,72 @@ class _ContestsScreenState extends State<ContestsScreen> {
                         padding: const EdgeInsets.all(16),
                       ),
                     ),
+
+                  // Top50 button
+                  if (contest.isStage1Top50 || contest.isFinalStage || contest.isFinished) ...[
+                    const SizedBox(height: 12),
+                    ElevatedButton.icon(
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const Stage1Top50Screen(),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.leaderboard),
+                      label: const Text('عرض أفضل 50 - Top50'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.cyan,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.all(16),
+                      ),
+                    ),
+                  ],
+
+                  // Final stage button
+                  if (contest.isFinalStage) ...[
+                    const SizedBox(height: 12),
+                    ElevatedButton.icon(
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const Stage1Screen(), // Reuse Stage1 screen for final voting
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.flag),
+                      label: const Text('التصويت النهائي - Final'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.amber,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.all(16),
+                      ),
+                    ),
+                  ],
+
+                  // Results button
+                  if (contest.isFinished) ...[
+                    const SizedBox(height: 12),
+                    ElevatedButton.icon(
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const FinalResultsScreen(),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.emoji_events),
+                      label: const Text('النتائج النهائية'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.green,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.all(16),
+                      ),
+                    ),
+                  ],
                 ],
 
                 const SizedBox(height: 24),
@@ -174,56 +242,287 @@ class _ContestsScreenState extends State<ContestsScreen> {
                 ),
                 const SizedBox(height: 8),
 
-                // DEV seed contestants
+                // DEV: Open Full Flow
                 ElevatedButton.icon(
                   onPressed: appState.isLoading
                       ? null
                       : () async {
-                          await appState.devSeedContestants();
-                          if (mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text(
-                                  'تم إضافة ${appState.contestants.length} متسابق وهمي',
-                                ),
-                                backgroundColor: Colors.green,
+                          final confirmed = await showDialog<bool>(
+                            context: context,
+                            builder: (context) => AlertDialog(
+                              title: const Text('تأكيد'),
+                              content: const Text(
+                                'هذا سيقوم بإعداد المسابقة بالكامل:\n'
+                                '• إنشاء مسابقة اليوم\n'
+                                '• إضافة 20 متسابق\n'
+                                '• بدء المرحلة الأولى + تصويت\n'
+                                '• تجميد أفضل 50\n'
+                                '• بدء المرحلة النهائية + تصويت\n'
+                                '• إنهاء المسابقة + النتائج\n\n'
+                                'هل تريد المتابعة؟',
                               ),
-                            );
+                              actions: [
+                                TextButton(
+                                  onPressed: () => Navigator.pop(context, false),
+                                  child: const Text('إلغاء'),
+                                ),
+                                ElevatedButton(
+                                  onPressed: () => Navigator.pop(context, true),
+                                  child: const Text('نعم'),
+                                ),
+                              ],
+                            ),
+                          );
+                          
+                          if (confirmed == true && mounted) {
+                            await appState.devOpenFullFlow();
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('✅ تم إعداد المسابقة بالكامل!'),
+                                  backgroundColor: Colors.green,
+                                  duration: Duration(seconds: 3),
+                                ),
+                              );
+                            }
                           }
                         },
-                  icon: const Icon(Icons.add_circle),
-                  label: const Text('إضافة 20 متسابق وهمي'),
+                  icon: const Icon(Icons.rocket_launch),
+                  label: const Text('🚀 DEV: فتح المسابقة كاملة (Full Flow)'),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.red,
+                    backgroundColor: Colors.green,
                     foregroundColor: Colors.white,
-                    padding: const EdgeInsets.all(12),
+                    padding: const EdgeInsets.all(16),
                   ),
+                ),
+
+                const SizedBox(height: 12),
+
+                // Row 1: Reset + Create
+                Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: appState.isLoading
+                            ? null
+                            : () async {
+                                await appState.devResetDay();
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('تم إعادة تعيين اليوم'),
+                                      backgroundColor: Colors.orange,
+                                    ),
+                                  );
+                                }
+                              },
+                        icon: const Icon(Icons.refresh, size: 18),
+                        label: const Text('Reset Day', style: TextStyle(fontSize: 12)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.orange,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.all(12),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: appState.isLoading
+                            ? null
+                            : () async {
+                                await appState.devCreateTodayContest();
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('تم إنشاء مسابقة اليوم'),
+                                      backgroundColor: Colors.green,
+                                    ),
+                                  );
+                                }
+                              },
+                        icon: const Icon(Icons.add, size: 18),
+                        label: const Text('Create Contest', style: TextStyle(fontSize: 12)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blue,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.all(12),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
 
                 const SizedBox(height: 8),
 
-                // DEV start stage1
-                ElevatedButton.icon(
-                  onPressed: appState.isLoading
-                      ? null
-                      : () async {
-                          await appState.devStartStage1Now();
-                          if (mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('تم بدء المرحلة الأولى'),
-                                backgroundColor: Colors.green,
-                              ),
-                            );
-                          }
-                        },
-                  icon: const Icon(Icons.play_arrow),
-                  label: const Text('بدء المرحلة الأولى (Stage1)'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.orange,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.all(12),
-                  ),
+                // Row 2: Seed Contestants + Seed Votes
+                Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: appState.isLoading
+                            ? null
+                            : () async {
+                                await appState.devSeedContestants();
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text('تم إضافة ${appState.contestants.length} متسابق'),
+                                      backgroundColor: Colors.green,
+                                    ),
+                                  );
+                                }
+                              },
+                        icon: const Icon(Icons.people, size: 18),
+                        label: const Text('Seed 20', style: TextStyle(fontSize: 12)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.red,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.all(12),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: appState.isLoading
+                            ? null
+                            : () async {
+                                final isFinal = appState.activeContest?.isFinalStage ?? false;
+                                await appState.devSeedVotes(isFinalStage: isFinal);
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('تم إضافة الأصوات'),
+                                      backgroundColor: Colors.green,
+                                    ),
+                                  );
+                                }
+                              },
+                        icon: const Icon(Icons.how_to_vote, size: 18),
+                        label: const Text('Seed Votes', style: TextStyle(fontSize: 12)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.purple,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.all(12),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 8),
+
+                // Row 3: Start Stage1 + Freeze Top50
+                Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: appState.isLoading
+                            ? null
+                            : () async {
+                                await appState.devStartStage1Now();
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('تم بدء Stage1'),
+                                      backgroundColor: Colors.green,
+                                    ),
+                                  );
+                                }
+                              },
+                        icon: const Icon(Icons.play_arrow, size: 18),
+                        label: const Text('Start Stage1', style: TextStyle(fontSize: 12)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.orange,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.all(12),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: appState.isLoading
+                            ? null
+                            : () async {
+                                await appState.devFreezeTop50Now();
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('تم تجميد أفضل 50'),
+                                      backgroundColor: Colors.green,
+                                    ),
+                                  );
+                                }
+                              },
+                        icon: const Icon(Icons.ac_unit, size: 18),
+                        label: const Text('Freeze Top50', style: TextStyle(fontSize: 12)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.cyan,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.all(12),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 8),
+
+                // Row 4: Start Final + Finish
+                Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: appState.isLoading
+                            ? null
+                            : () async {
+                                await appState.devStartFinalNow();
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('تم بدء النهائي'),
+                                      backgroundColor: Colors.green,
+                                    ),
+                                  );
+                                }
+                              },
+                        icon: const Icon(Icons.flag, size: 18),
+                        label: const Text('Start Final', style: TextStyle(fontSize: 12)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.amber,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.all(12),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: appState.isLoading
+                            ? null
+                            : () async {
+                                await appState.devFinishNow();
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('تم إنهاء المسابقة'),
+                                      backgroundColor: Colors.green,
+                                    ),
+                                  );
+                                }
+                              },
+                        icon: const Icon(Icons.emoji_events, size: 18),
+                        label: const Text('Finish Now', style: TextStyle(fontSize: 12)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.green[700],
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.all(12),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
 
                 const SizedBox(height: 8),
@@ -231,16 +530,16 @@ class _ContestsScreenState extends State<ContestsScreen> {
                 // DEV add funds
                 ElevatedButton.icon(
                   onPressed: () {
-                    appState.devAddFunds(nova: 100, aura: 100);
+                    appState.devAddFunds(nova: 1000, aura: 1000);
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
-                        content: Text('تم إضافة 100 نوفا و 100 أورا'),
+                        content: Text('تم إضافة 1000 نوفا و 1000 أورا'),
                         backgroundColor: Colors.green,
                       ),
                     );
                   },
                   icon: const Icon(Icons.attach_money),
-                  label: const Text('إضافة أموال تجريبية (100+100)'),
+                  label: const Text('إضافة أموال (1000+1000)'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.blue,
                     foregroundColor: Colors.white,
@@ -281,16 +580,16 @@ class _ContestsScreenState extends State<ContestsScreen> {
 
   String _getStageName(String stage) {
     switch (stage) {
-      case 'preview':
-        return 'معاينة';
+      case 'preStage':
+        return 'ما قبل البداية';
       case 'stage1':
         return 'المرحلة الأولى';
-      case 'stage2':
-        return 'المرحلة الثانية';
-      case 'stage3':
-        return 'المرحلة الثالثة';
-      case 'complete':
-        return 'مكتملة';
+      case 'stage1Top50':
+        return 'أفضل 50 - المرحلة الأولى';
+      case 'finalStage':
+        return 'المرحلة النهائية';
+      case 'finished':
+        return 'انتهت';
       default:
         return stage;
     }

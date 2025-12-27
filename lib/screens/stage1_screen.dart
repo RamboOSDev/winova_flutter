@@ -447,16 +447,16 @@ class _Stage1ScreenState extends State<Stage1Screen> {
 
   String _getStageName(String stage) {
     switch (stage) {
-      case 'preview':
-        return 'معاينة';
+      case 'preStage':
+        return 'ما قبل البداية';
       case 'stage1':
         return 'المرحلة الأولى';
-      case 'stage2':
-        return 'المرحلة الثانية';
-      case 'stage3':
-        return 'المرحلة الثالثة';
-      case 'complete':
-        return 'مكتملة';
+      case 'stage1Top50':
+        return 'أفضل 50 - المرحلة الأولى';
+      case 'finalStage':
+        return 'المرحلة النهائية';
+      case 'finished':
+        return 'انتهت';
       default:
         return stage;
     }
