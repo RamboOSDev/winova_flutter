@@ -251,6 +251,16 @@ class AppState with ChangeNotifier {
     }
   }
 
+  /// Vote for a contestant
+  /// 
+  /// Enhanced voting with support for:
+  /// - Multiple votes at once (voteCount parameter)
+  /// - Free vote during Free Hour (useFreeVote parameter)
+  /// - Daily limit tracking (100 votes per day)
+  /// - Balance verification
+  /// 
+  /// Note: This is an enhanced version of the vote method that maintains
+  /// backward compatibility through optional named parameters.
   Future<bool> vote(String contestantId, {int voteCount = 1, bool useFreeVote = false}) async {
     if (_currentUser == null || _activeContest == null) return false;
     

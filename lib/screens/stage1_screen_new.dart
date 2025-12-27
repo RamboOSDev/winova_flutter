@@ -377,7 +377,9 @@ class _Stage1ScreenNewState extends State<Stage1ScreenNew> {
                 radius: 32,
                 backgroundColor: Colors.purple[100],
                 child: Text(
-                  contestant.displayName.substring(0, 1),
+                  contestant.displayName.isNotEmpty 
+                      ? contestant.displayName.substring(0, 1)
+                      : '?',
                   style: const TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.bold,

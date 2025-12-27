@@ -28,5 +28,5 @@ class AppConfig {
   static const double auraRewardPercentage = 0.2; // 20% of paid votes
   
   // Prize distribution percentages
-  static const List<double> prizeDist ribution = [0.50, 0.20, 0.12, 0.10, 0.08]; // Top 5
+  static const List<double> prizeDistribution = [0.50, 0.20, 0.12, 0.10, 0.08]; // Top 5
 }

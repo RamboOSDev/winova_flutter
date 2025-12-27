@@ -282,7 +282,9 @@ class Stage1Top50ScreenNew extends StatelessWidget {
                 radius: isTopThree ? 32 : 28,
                 backgroundColor: Colors.purple[100],
                 child: Text(
-                  contestant.displayName.substring(0, 1),
+                  contestant.displayName.isNotEmpty 
+                      ? contestant.displayName.substring(0, 1)
+                      : '?',
                   style: TextStyle(
                     fontSize: isTopThree ? 24 : 20,
                     fontWeight: FontWeight.bold,
